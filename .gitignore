@@ -18,7 +18,10 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Test files
+
+# Logs
+*.log
+
 YAFD_Test_Database.kdbx
 create_test_db.py
 plgx-build-install-run-loop.bat

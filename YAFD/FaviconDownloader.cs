@@ -26,6 +26,7 @@ namespace YetAnotherFaviconDownloader
         private static readonly Regex headTag, baseTag, commentTag, scriptStyleTag;
         private static readonly Regex linkTags, relAttribute, relAppleTouchIcon, relMaskIcon;
         private static readonly Regex hrefAttribute, sizesAttribute, typeAttribute;
+        private static readonly Regex ogImage;
 
         // Android package to domain mapping patterns - use the comprehensive mapping class
         // (Inline mappings kept as fallback for common apps)
@@ -81,6 +82,9 @@ namespace YetAnotherFaviconDownloader
 
             // type attribute (to detect SVG)
             typeAttribute = new Regex(@"type\s*=\s*(?<q>'|"")?(?<type>[^'""\s>]+)\s*\k<q>?", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
+
+            // Open Graph image (for Google Play fallback)
+            ogImage = new Regex(@"<meta\s+property=""og:image""\s+content=""(?<url>[^""]+)""", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
 
             // Enable TLS for newer .NET versions
             try
@@ -169,15 +173,52 @@ namespace YetAnotherFaviconDownloader
             return !string.IsNullOrEmpty(url) && androidAppSchema.IsMatch(url);
         }
 
+        private byte[] GetIconFromGooglePlay(string packageName)
+        {
+            try
+            {
+                string playStoreUrl = "https://play.google.com/store/apps/details?id=" + packageName;
+                Util.Log("Trying Google Play Store: {0}", playStoreUrl);
+
+                string page = DownloadPage(new Uri(playStoreUrl));
+                Match match = ogImage.Match(page);
+
+                if (match.Success)
+                {
+                    string iconUrl = match.Groups["url"].Value;
+                    Util.Log("Found Google Play icon: {0}", iconUrl);
+
+                    byte[] data = DownloadData(new Uri(iconUrl));
+                    if (ResizeImage(ref data))
+                    {
+                        return data;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Util.Log("Google Play fallback failed: {0}", ex.Message);
+            }
+
+            return null;
+        }
+
         public byte[] GetIcon(string url)
         {
             bool wasAndroidUrl = false;
+            string androidPackageName = null;
             
             // Handle Android URLs
             if (IsAndroidUrl(url))
             {
                 try
                 {
+                    Match match = androidAppSchema.Match(url);
+                    if (match.Success)
+                    {
+                        androidPackageName = match.Groups["package"].Value;
+                    }
+
                     string domain = ConvertAndroidUrlToDomain(url);
                     if (!string.IsNullOrEmpty(domain))
                     {
@@ -187,17 +228,31 @@ namespace YetAnotherFaviconDownloader
                     }
                     else
                     {
-                        Util.Log("Android URL could not be converted: {0}", url);
+                        Util.Log("Android URL could not be converted: {0}. Trying Google Play directly.", url);
+                        // If conversion fails, try Google Play immediately
+                        byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                        if (playIcon != null) return playIcon;
+
                         throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
                     }
                 }
                 catch (FaviconDownloaderException)
                 {
+                    if (!string.IsNullOrEmpty(androidPackageName))
+                    {
+                         byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                         if (playIcon != null) return playIcon;
+                    }
                     throw;
                 }
                 catch (Exception ex)
                 {
                     Util.Log("Error converting Android URL {0}: {1}", url, ex.Message);
+                    if (!string.IsNullOrEmpty(androidPackageName))
+                    {
+                         byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                         if (playIcon != null) return playIcon;
+                    }
                     throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
                 }
             }
@@ -217,6 +272,12 @@ namespace YetAnotherFaviconDownloader
 
             if (++attempts > 4)
             {
+                // Before giving up completely on an Android URL that converted to a domain but failed HTTP, try Play Store
+                if (wasAndroidUrl && !string.IsNullOrEmpty(androidPackageName))
+                {
+                    byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                    if (playIcon != null) return playIcon;
+                }
                 throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.Error);
             }
             Util.Log("Attempt {0}: {1}", attempts, url);
@@ -276,14 +337,40 @@ namespace YetAnotherFaviconDownloader
                 }
 
                 HttpWebResponse response = ex.Response as HttpWebResponse;
-                if (response != null && response.StatusCode == HttpStatusCode.NotFound)
+                if (response != null)
                 {
-                    throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
+                    Util.Log("Download failed for {0}. Status: {1}", url, response.StatusCode);
+                    if (response.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        // If NotFound, and it was an Android URL, try Play Store
+                        if (wasAndroidUrl && !string.IsNullOrEmpty(androidPackageName))
+                        {
+                            byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                            if (playIcon != null) return playIcon;
+                        }
+                        throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
+                    }
                 }
                 else
                 {
-                    throw new FaviconDownloaderException(ex);
+                    Util.Log("Download failed for {0}. Error: {1}", url, ex.Message);
                 }
+                
+                // General WebException - try Play Store if Android
+                if (wasAndroidUrl && !string.IsNullOrEmpty(androidPackageName))
+                {
+                    byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                    if (playIcon != null) return playIcon;
+                }
+
+                throw new FaviconDownloaderException(ex);
+            }
+            
+            // Final fallback for Android if nothing was found
+            if (wasAndroidUrl && !string.IsNullOrEmpty(androidPackageName))
+            {
+                byte[] playIcon = GetIconFromGooglePlay(androidPackageName);
+                if (playIcon != null) return playIcon;
             }
 
             throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
@@ -349,8 +436,9 @@ namespace YetAnotherFaviconDownloader
                         return data;
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    Util.Log("Fallback provider {0} failed: {1}", providerUrl, ex.Message);
                     // Try next provider
                 }
             }
@@ -432,14 +520,20 @@ namespace YetAnotherFaviconDownloader
             catch (WebException ex)
             {
                 HttpWebResponse response = ex.Response as HttpWebResponse;
-                if (response != null && response.StatusCode == HttpStatusCode.NotFound)
+                if (response != null)
                 {
-                    throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
+                    Util.Log("Custom provider failed. Status: {0}", response.StatusCode);
+                    if (response.StatusCode == HttpStatusCode.NotFound)
+                    {
+                        throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);
+                    }
                 }
                 else
                 {
-                    throw new FaviconDownloaderException(ex);
+                    Util.Log("Custom provider failed. Error: {0}", ex.Message);
                 }
+
+                throw new FaviconDownloaderException(ex);
             }
 
             throw new FaviconDownloaderException(FaviconDownloaderExceptionStatus.NotFound);

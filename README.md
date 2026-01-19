@@ -41,7 +41,9 @@ _Yet Another Favicon Downloader Enhanced_ is a significantly improved fork of th
   - Direct website download with smart HTML parsing
   - Automatic fallback to multiple providers (Google, DuckDuckGo, Icon Horse, Yandex)
   - Handles redirects, cookies, and modern browser headers
-- **Android URL Support** - Converts `androidapp://` URLs to web domains
+- **Android URL Support**
+  - Converts `androidapp://` URLs to web domains
+  - **Google Play Store Fallback**: Automatically fetches icons from Google Play if the website is down or the package is unknown
 - **Placeholder Resolution** - Resolves KeePass placeholders like `{REF:U@I:UUID}`
 - **Self-signed Certificate Support** - Optional bypass for internal servers
 - **Configurable Timeout** - 5-60 seconds, prevents hanging on expired domains
@@ -155,6 +157,8 @@ Unknown packages are automatically derived using smart heuristics:
 - `com.example.app` → `example.com`
 - `org.example.app` → `example.org`
 - `uk.co.example.app` → `example.co.uk`
+
+**Google Play Store Fallback**: If the domain conversion fails, or if the website is unreachable (e.g. 404), the plugin automatically fetches the high-resolution icon directly from the **Google Play Store**.
 
 ## Custom Provider URLs
 

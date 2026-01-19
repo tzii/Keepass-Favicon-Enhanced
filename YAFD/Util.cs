@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -85,6 +85,17 @@ namespace YetAnotherFaviconDownloader
 
         public static void Log(string format, params object[] args)
         {
+            try
+            {
+                string msg = string.Format(format, args);
+                string logFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "YAFD.log");
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+                System.IO.File.AppendAllText(logFile, string.Format("[{0}] {1}{2}", timestamp, msg, Environment.NewLine));
+            }
+            catch
+            {
+                // Ignore logging errors
+            }
 #if DEBUG
             Debug.Print("[YAFD] " + format, args);
 #endif

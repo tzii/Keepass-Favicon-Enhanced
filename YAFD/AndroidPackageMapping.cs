@@ -42,7 +42,6 @@ namespace YetAnotherFaviconDownloader
             { "com.whatsapp.w4b", "whatsapp.com" },
             { "com.skype.raider", "skype.com" },
             { "com.skype.m2", "skype.com" },
-            { "com.Slack", "slack.com" },
             { "com.slack", "slack.com" },
             { "us.zoom.videomeetings", "zoom.us" },
             { "com.microsoft.teams", "teams.microsoft.com" },
