@@ -1,16 +1,16 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Yet Another Favicon Downloader")]
-[assembly: AssemblyDescription("Yet another favicon downloader for KeePass 2.x")]
+[assembly: AssemblyTitle("Yet Another Favicon Downloader Enhanced")]
+[assembly: AssemblyDescription("Enhanced favicon downloader for KeePass 2.x with robust icon detection, Android URL support, and fallback providers")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Rafael Cossovan de França")]
+[assembly: AssemblyCompany("Fork by tzii - Original by Rafael Cossovan de França")]
 [assembly: AssemblyProduct("KeePass Plugin")]
-[assembly: AssemblyCopyright("Copyright ©  2017 Rafael Cossovan de França")]
+[assembly: AssemblyCopyright("Copyright © 2017-2026 Rafael Cossovan de França, tzii")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -32,5 +32,5 @@ using System.Runtime.InteropServices;
 // You can specify all the values or you can default the Build and Revision Numbers
 // by using the '*' as shown below:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("1.2.5.0")]
-[assembly: AssemblyFileVersion("1.2.5.0")]
+[assembly: AssemblyVersion("2.0.0.0")]
+[assembly: AssemblyFileVersion("2.0.0.0")]

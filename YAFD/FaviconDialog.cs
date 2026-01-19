@@ -1,5 +1,6 @@
-﻿using KeePass.Plugins;
+using KeePass.Plugins;
 using KeePass.UI;
+using KeePass.Util.Spr;
 using KeePassLib;
 using KeePassLib.Interfaces;
 using System;
@@ -18,12 +19,14 @@ namespace YetAnotherFaviconDownloader
 
         private PwEntry[] entries;
         private string status;
+        private int actualChanges = 0;
 
         private class ProgressInfo
         {
             public int Success;
             public int NotFound;
             public int Error;
+            public int Skipped;
             public int Current;
             public int Remaining;
 
@@ -66,6 +69,38 @@ namespace YetAnotherFaviconDownloader
             bgWorker.RunWorkerAsync(customProvider);
         }
 
+        /// <summary>
+        /// Resolves KeePass placeholders in a URL string
+        /// </summary>
+        private string ResolvePlaceholders(PwEntry entry, string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return url;
+
+            // Check if URL contains placeholders
+            if (!url.Contains("{"))
+                return url;
+
+            try
+            {
+                // Use KeePass's SprEngine to resolve placeholders
+                SprContext ctx = new SprContext(entry, pluginHost.Database, SprCompileFlags.All);
+                string resolved = SprEngine.Compile(url, ctx);
+                
+                if (resolved != url)
+                {
+                    Util.Log("Placeholder resolved: {0} => {1}", url, resolved);
+                }
+                
+                return resolved;
+            }
+            catch (Exception ex)
+            {
+                Util.Log("Placeholder resolution failed: {0}", ex.Message);
+                return url;
+            }
+        }
+
         private void BgWorker_DoWork(object sender, DoWorkEventArgs e)
         {
             // Custom provider download (argument)
@@ -77,8 +112,16 @@ namespace YetAnotherFaviconDownloader
             // Custom icons that will be added to the database
             PwCustomIcon[] icons = new PwCustomIcon[entries.Length];
 
+            // Track which entries actually changed
+            bool[] entryChanged = new bool[entries.Length];
+
             // Set up proxy information for all WebClients
             FaviconDownloader.Proxy = Util.GetKeePassProxy();
+
+            // Get config options
+            bool skipExisting = YetAnotherFaviconDownloaderExt.Config.GetSkipExistingIcons();
+            bool useFallback = YetAnotherFaviconDownloaderExt.Config.GetUseFallbackProviders();
+            string iconPrefix = YetAnotherFaviconDownloaderExt.Config.GetIconNamePrefix();
 
             using (ManualResetEvent waiter = new ManualResetEvent(false))
             {
@@ -96,110 +139,144 @@ namespace YetAnotherFaviconDownloader
                         {
                             int i = Interlocked.Increment(ref progress.Current) - 1;
 
-                            // Fields
-                            string url = entry.Strings.ReadSafe(PwDefs.UrlField);
-
-                            if (url == string.Empty)
+                            // Check if we should skip entries with existing icons
+                            if (skipExisting && !entry.CustomIconUuid.Equals(PwUuid.Zero))
                             {
-                                // If the user wants to use the title field, let's give it a try
-                                if (YetAnotherFaviconDownloaderExt.Config.GetUseTitleField())
-                                {
-                                    url = entry.Strings.ReadSafe(PwDefs.TitleField);
-                                }
-                            }
-
-                            // Empty URL field
-                            if (url == string.Empty)
-                            {
-                                // Can't find an icon
-                                Interlocked.Increment(ref progress.NotFound);
+                                Util.Log("Skipping entry with existing icon: {0}", entry.Strings.ReadSafe(PwDefs.TitleField));
+                                Interlocked.Increment(ref progress.Skipped);
+                                entries[i] = null;
                             }
                             else
                             {
-                                Util.Log("Downloading: {0}", url);
+                                // Fields
+                                string url = entry.Strings.ReadSafe(PwDefs.UrlField);
 
-                                using (FaviconDownloader fd = new FaviconDownloader())
+                                // Resolve placeholders
+                                url = ResolvePlaceholders(entry, url);
+
+                                if (url == string.Empty)
                                 {
-                                    try
+                                    // If the user wants to use the title field, let's give it a try
+                                    if (YetAnotherFaviconDownloaderExt.Config.GetUseTitleField())
                                     {
-                                        byte[] data = null;
-                                        // Download favicon
-                                        if (customProvider)
+                                        url = entry.Strings.ReadSafe(PwDefs.TitleField);
+                                        // Resolve placeholders in title too
+                                        url = ResolvePlaceholders(entry, url);
+                                        
+                                        // When using title as URL, it often lacks the scheme (e.g. "google.com")
+                                        // We should manually add it to ensure it passes validation
+                                        if (!string.IsNullOrEmpty(url) && !url.Contains("://"))
                                         {
-                                            data = fd.GetIconCustomProvider(url);
+                                            url = "http://" + url;
                                         }
-                                        else
+                                    }
+                                }
+
+                                // Empty URL field
+                                if (url == string.Empty)
+                                {
+                                    // Can't find an icon
+                                    Interlocked.Increment(ref progress.NotFound);
+                                    entries[i] = null;
+                                }
+                                else
+                                {
+                                    Util.Log("Downloading: {0}", url);
+
+                                    using (FaviconDownloader fd = new FaviconDownloader())
+                                    {
+                                        try
                                         {
-                                            data = fd.GetIcon(url);
-                                        }
-                                        Util.Log("Icon downloaded with success");
-
-                                        // Hash icon data (avoid duplicates)
-                                        byte[] hash = Util.HashData(data);
-
-                                        // Creates an icon only if your UUID does not exist
-                                        PwUuid uuid = new PwUuid(hash);
-                                        if (!pluginHost.Database.CustomIcons.Exists(delegate (PwCustomIcon x) { return x.Uuid.Equals(uuid); }))
-                                        {
-                                            // Add icon
-                                            icons[i] = new PwCustomIcon(uuid, data);
-
-                                            #region For KeePass 2.48+ only
-                                            if (PwDefs.FileVersion64 >= 0x0002003000000000UL)
+                                            byte[] data = null;
+                                            
+                                            // Download favicon
+                                            if (customProvider)
                                             {
-                                                var pwCustomIconType = icons[i].GetType();
-
-                                                // Name the icon
-                                                var nameProperty = pwCustomIconType.GetProperty("Name");
-                                                if (nameProperty != null)
-                                                {
-                                                    // Since the URL was valid, we just force a valid scheme prefix to be able to get the Host
-                                                    var host = fd.GetValidHost(url);
-                                                    nameProperty.SetValue(icons[i], "yafd-" + host);
-                                                }
-
-                                                // Update last modification time
-                                                var lastModificationTimeProperty = pwCustomIconType.GetProperty("LastModificationTime");
-                                                if (lastModificationTimeProperty != null)
-                                                {
-                                                    lastModificationTimeProperty.SetValue(icons[i], DateTime.UtcNow);
-                                                }
+                                                data = fd.GetIconCustomProvider(url);
                                             }
-                                            #endregion
-                                        }
+                                            else if (useFallback)
+                                            {
+                                                data = fd.GetIconWithFallback(url);
+                                            }
+                                            else
+                                            {
+                                                data = fd.GetIcon(url);
+                                            }
+                                            
+                                            Util.Log("Icon downloaded with success");
 
-                                        // Check if icon is the same
-                                        if (entry.CustomIconUuid.Equals(uuid))
+                                            // Hash icon data (avoid duplicates)
+                                            byte[] hash = Util.HashData(data);
+
+                                            // Creates an icon only if your UUID does not exist
+                                            PwUuid uuid = new PwUuid(hash);
+                                            if (!pluginHost.Database.CustomIcons.Exists(delegate (PwCustomIcon x) { return x.Uuid.Equals(uuid); }))
+                                            {
+                                                // Add icon
+                                                icons[i] = new PwCustomIcon(uuid, data);
+
+                                                #region For KeePass 2.48+ only
+                                                if (PwDefs.FileVersion64 >= 0x0002003000000000UL)
+                                                {
+                                                    var pwCustomIconType = icons[i].GetType();
+
+                                                    // Name the icon with configurable prefix
+                                                    var nameProperty = pwCustomIconType.GetProperty("Name");
+                                                    if (nameProperty != null)
+                                                    {
+                                                        var host = fd.GetValidHost(url);
+                                                        string iconName = string.IsNullOrEmpty(iconPrefix) ? host : iconPrefix + host;
+                                                        nameProperty.SetValue(icons[i], iconName);
+                                                    }
+
+                                                    // Update last modification time
+                                                    var lastModificationTimeProperty = pwCustomIconType.GetProperty("LastModificationTime");
+                                                    if (lastModificationTimeProperty != null)
+                                                    {
+                                                        lastModificationTimeProperty.SetValue(icons[i], DateTime.UtcNow);
+                                                    }
+                                                }
+                                                #endregion
+                                            }
+
+                                            // Check if icon is the same - this is the FIX for ghost modifications
+                                            if (entry.CustomIconUuid.Equals(uuid))
+                                            {
+                                                // Icon is exactly the same, don't mark as changed
+                                                Util.Log("Icon unchanged for entry");
+                                                entries[i] = null;
+                                                entryChanged[i] = false;
+                                            }
+                                            else
+                                            {
+                                                // Associate with this entry
+                                                entry.CustomIconUuid = uuid;
+                                                entryChanged[i] = true;
+                                                Interlocked.Increment(ref actualChanges);
+                                            }
+
+                                            // Icon downloaded with success
+                                            Interlocked.Increment(ref progress.Success);
+                                        }
+                                        catch (FaviconDownloaderException ex)
                                         {
+                                            Util.Log("Failed to download favicon");
+
+                                            if (ex.Status == FaviconDownloaderExceptionStatus.NotFound)
+                                            {
+                                                // Can't find an icon
+                                                Interlocked.Increment(ref progress.NotFound);
+                                            }
+                                            else
+                                            {
+                                                // Some other error (network, etc)
+                                                Interlocked.Increment(ref progress.Error);
+                                            }
+
                                             // Avoid updating the entry
                                             entries[i] = null;
+                                            entryChanged[i] = false;
                                         }
-                                        else
-                                        {
-                                            // Associate with this entry
-                                            entry.CustomIconUuid = uuid;
-                                        }
-
-                                        // Icon downloaded with success
-                                        Interlocked.Increment(ref progress.Success);
-                                    }
-                                    catch (FaviconDownloaderException ex)
-                                    {
-                                        Util.Log("Failed to download favicon");
-
-                                        if (ex.Status == FaviconDownloaderExceptionStatus.NotFound)
-                                        {
-                                            // Can't find an icon
-                                            Interlocked.Increment(ref progress.NotFound);
-                                        }
-                                        else
-                                        {
-                                            // Some other error (network, etc)
-                                            Interlocked.Increment(ref progress.Error);
-                                        }
-
-                                        // Avoid updating the entry
-                                        entries[i] = null;
                                     }
                                 }
                             }
@@ -229,13 +306,26 @@ namespace YetAnotherFaviconDownloader
 
             // Progress 100%
             ReportProgress(progress);
-            status = string.Format("YAFD: Success: {0} / Not Found: {1} / Error: {2}.", progress.Success, progress.NotFound, progress.Error);
+            
+            // Build status message
+            List<string> statusParts = new List<string>();
+            statusParts.Add(string.Format("Success: {0}", progress.Success));
+            if (progress.Skipped > 0)
+                statusParts.Add(string.Format("Skipped: {0}", progress.Skipped));
+            statusParts.Add(string.Format("Not Found: {0}", progress.NotFound));
+            if (progress.Error > 0)
+                statusParts.Add(string.Format("Error: {0}", progress.Error));
+            
+            status = "YAFD: " + string.Join(" / ", statusParts.ToArray()) + ".";
 
             // Prevents inserting duplicate icons
             MergeCustomIcons(icons);
 
-            // Refresh icons on database
-            pluginHost.Database.UINeedsIconUpdate = true;
+            // Only mark database as needing icon update if there were actual changes
+            if (actualChanges > 0)
+            {
+                pluginHost.Database.UINeedsIconUpdate = true;
+            }
 
             // Waits long enough until we can see the output
             Thread.Sleep(3000);
@@ -244,7 +334,11 @@ namespace YetAnotherFaviconDownloader
         private void ReportProgress(ProgressInfo progress)
         {
             logger.SetProgress((uint)progress.Percent);
-            logger.SetText(string.Format("YAFD: Success: {0} / Not Found: {1} / Error: {2} / Remaining: {3}", progress.Success, progress.NotFound, progress.Error, progress.Remaining), LogStatusType.Info);
+            
+            string statusText = string.Format("YAFD: Success: {0} / Skipped: {1} / Not Found: {2} / Error: {3} / Remaining: {4}", 
+                progress.Success, progress.Skipped, progress.NotFound, progress.Error, progress.Remaining);
+            
+            logger.SetText(statusText, LogStatusType.Info);
         }
 
         private void MergeCustomIcons(PwCustomIcon[] icons)
@@ -292,17 +386,19 @@ namespace YetAnotherFaviconDownloader
             }
             else
             {
-                Util.Log("Done");
+                Util.Log("Done - {0} entries actually changed", actualChanges);
             }
 
             // Update entries (avoid cross-thread operation with other plugins)
+            // Only touch entries that actually changed
+            bool updateLastModified = YetAnotherFaviconDownloaderExt.Config.GetUpdateLastModified();
             foreach (PwEntry entry in entries)
             {
                 // You can't touch this (oh-oh oh oh oh-oh-oh)
                 if (entry == null) continue;
 
-                // Save it
-                entry.Touch(YetAnotherFaviconDownloaderExt.Config.GetUpdateLastModified(), false);
+                // Save it - only if configured to update last modified
+                entry.Touch(updateLastModified, false);
             }
 
             // Unblock UI
@@ -316,6 +412,20 @@ namespace YetAnotherFaviconDownloader
 
             // Report how many icons have been downloaded
             pluginHost.MainWindow.SetStatusEx(status);
+
+            // Auto-save if enabled and there were actual changes
+            if (actualChanges > 0 && YetAnotherFaviconDownloaderExt.Config.GetAutoSaveDatabase())
+            {
+                try
+                {
+                    Util.Log("Auto-saving database...");
+                    pluginHost.MainWindow.SaveDatabase(pluginHost.Database, null);
+                }
+                catch (Exception ex)
+                {
+                    Util.Log("Auto-save failed: {0}", ex.Message);
+                }
+            }
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using KeePass.Plugins;
+using KeePass.Plugins;
 using KeePass.Util;
 using KeePassLib;
 using KeePassLib.Collections;
@@ -52,21 +52,31 @@ namespace YetAnotherFaviconDownloader
 
         // Tools Menu
         private ToolStripSeparator toolsMenuSeparator;
-        private ToolStripMenuItem[] toolsMenuDropDownItems;
         private ToolStripMenuItem toolsMenuYAFD;
 
-        // YAFD SubItems
+        // YAFD SubItems - Original
         private ToolStripMenuItem toolsSubItemsPrefixURLsItem;
         private ToolStripMenuItem toolsSubItemsTitleFieldItem;
         private ToolStripMenuItem toolsSubItemsUpdateModifiedItem;
         private ToolStripMenuItem toolsSubItemsMaximumIconSizeItems;
         private ToolStripMenuItem toolsSubItemsDownloadProviderItem;
 
+        // YAFD SubItems - New
+        private ToolStripMenuItem toolsSubItemsSkipExistingItem;
+        private ToolStripMenuItem toolsSubItemsIconPrefixItem;
+        private ToolStripMenuItem toolsSubItemsAllowInvalidCertsItem;
+        private ToolStripMenuItem toolsSubItemsTimeoutItem;
+        private ToolStripMenuItem toolsSubItemsAutoSaveItem;
+        private ToolStripMenuItem toolsSubItemsFallbackProvidersItem;
+
         // YAFD Icon SubItems
         const int iconSizeMin = 16;
         const int iconSizeMax = 128;
         const int iconSizeIncr = 16;
         private List<ToolStripMenuItem> toolsMaxIconSizeSubItems;
+
+        // YAFD Timeout SubItems
+        private List<ToolStripMenuItem> toolsTimeoutSubItems;
 
         public override bool Initialize(IPluginHost host)
         {
@@ -111,16 +121,32 @@ namespace YetAnotherFaviconDownloader
             // Tools -> YAFD -> SubItems
 
             // Automatic prefix URLs with http(s)://
-            toolsSubItemsPrefixURLsItem = new ToolStripMenuItem("Automatic prefix URLs with http(s)://", null, PrefixURLsMenu_Click);  // TODO: i18n?
+            toolsSubItemsPrefixURLsItem = new ToolStripMenuItem("Automatic prefix URLs with http(s)://", null, PrefixURLsMenu_Click);
             toolsSubItemsPrefixURLsItem.Checked = Config.GetAutomaticPrefixURLs();
 
             // Use title field if URL field is empty
-            toolsSubItemsTitleFieldItem = new ToolStripMenuItem("Use title field if URL field is empty", null, TitleFieldMenu_Click);  // TODO: i18n?
+            toolsSubItemsTitleFieldItem = new ToolStripMenuItem("Use title field if URL field is empty", null, TitleFieldMenu_Click);
             toolsSubItemsTitleFieldItem.Checked = Config.GetUseTitleField();
 
             // Update last modified date when adding/updating icons
-            toolsSubItemsUpdateModifiedItem = new ToolStripMenuItem("Update entry last modification time", null, LastModifiedMenu_Click);  // TODO: i18n?
+            toolsSubItemsUpdateModifiedItem = new ToolStripMenuItem("Update entry last modification time", null, LastModifiedMenu_Click);
             toolsSubItemsUpdateModifiedItem.Checked = Config.GetUpdateLastModified();
+
+            // Skip entries that already have icons
+            toolsSubItemsSkipExistingItem = new ToolStripMenuItem("Skip entries with existing icons", null, SkipExistingMenu_Click);
+            toolsSubItemsSkipExistingItem.Checked = Config.GetSkipExistingIcons();
+
+            // Use fallback providers when direct download fails
+            toolsSubItemsFallbackProvidersItem = new ToolStripMenuItem("Use fallback providers (Google, DuckDuckGo, etc.)", null, FallbackProvidersMenu_Click);
+            toolsSubItemsFallbackProvidersItem.Checked = Config.GetUseFallbackProviders();
+
+            // Allow invalid/self-signed certificates
+            toolsSubItemsAllowInvalidCertsItem = new ToolStripMenuItem("Allow self-signed SSL certificates", null, AllowInvalidCertsMenu_Click);
+            toolsSubItemsAllowInvalidCertsItem.Checked = Config.GetAllowInvalidCertificates();
+
+            // Auto-save database after download
+            toolsSubItemsAutoSaveItem = new ToolStripMenuItem("Auto-save database after download", null, AutoSaveMenu_Click);
+            toolsSubItemsAutoSaveItem.Checked = Config.GetAutoSaveDatabase();
 
             // Tools -> YAFD -> Maximum icon size -> SubItems
             toolsMaxIconSizeSubItems = new List<ToolStripMenuItem>();
@@ -139,28 +165,61 @@ namespace YetAnotherFaviconDownloader
                 toolsMaxIconSizeSubItems[index].Checked = true;
             }
 
-            toolsSubItemsMaximumIconSizeItems = new ToolStripMenuItem("Maximum icon size", (Image)pluginHost.Resources.GetObject("B16x16_Edit"), toolsMaxIconSizeSubItems.ToArray());  // TODO: i18n?
+            toolsSubItemsMaximumIconSizeItems = new ToolStripMenuItem("Maximum icon size", (Image)pluginHost.Resources.GetObject("B16x16_Edit"), toolsMaxIconSizeSubItems.ToArray());
+
+            // Tools -> YAFD -> Connection timeout -> SubItems
+            toolsTimeoutSubItems = new List<ToolStripMenuItem>();
+            int[] timeoutValues = new int[] { 5, 10, 15, 20, 30, 60 };
+            int currentTimeout = Config.GetConnectionTimeout();
+            
+            foreach (int timeout in timeoutValues)
+            {
+                var timeoutText = string.Format("{0} seconds", timeout);
+                var item = new ToolStripMenuItem(timeoutText, null, ConnectionTimeout_Click);
+                item.Tag = timeout;
+                item.Checked = (timeout == currentTimeout);
+                toolsTimeoutSubItems.Add(item);
+            }
+
+            toolsSubItemsTimeoutItem = new ToolStripMenuItem("Connection timeout", (Image)pluginHost.Resources.GetObject("B16x16_History"), toolsTimeoutSubItems.ToArray());
+
+            // Icon name prefix
+            toolsSubItemsIconPrefixItem = new ToolStripMenuItem("Configure icon name prefix...", (Image)pluginHost.Resources.GetObject("B16x16_EditPaste"), IconPrefixMenu_Click);
 
             // Custom download provider
-            toolsSubItemsDownloadProviderItem = new ToolStripMenuItem("Custom download provider", (Image)pluginHost.Resources.GetObject("B16x16_WWW"), ToolsSubItemsDownloadProviderItem_Click);
+            toolsSubItemsDownloadProviderItem = new ToolStripMenuItem("Custom download provider...", (Image)pluginHost.Resources.GetObject("B16x16_WWW"), ToolsSubItemsDownloadProviderItem_Click);
 
             //
 
             // Add Tools menu items
             toolsMenuSeparator = new ToolStripSeparator();
 
-            toolsMenuDropDownItems = new ToolStripMenuItem[]
-            {
-                toolsSubItemsPrefixURLsItem,
-                toolsSubItemsTitleFieldItem,
-                toolsSubItemsUpdateModifiedItem,
-                toolsSubItemsMaximumIconSizeItems,
-                toolsSubItemsDownloadProviderItem,
+            // Build menu with proper separators
+            toolsMenuYAFD = new ToolStripMenuItem("Yet Another Favicon Downloader", menuImage);
+            
+            // Basic settings
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsPrefixURLsItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsTitleFieldItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsUpdateModifiedItem);
+            toolsMenuYAFD.DropDownItems.Add(new ToolStripSeparator());
+            
+            // Enhanced settings
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsSkipExistingItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsFallbackProvidersItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsAllowInvalidCertsItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsAutoSaveItem);
+            toolsMenuYAFD.DropDownItems.Add(new ToolStripSeparator());
+            
+            // Advanced settings
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsMaximumIconSizeItems);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsTimeoutItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsIconPrefixItem);
+            toolsMenuYAFD.DropDownItems.Add(toolsSubItemsDownloadProviderItem);
+            
 #if DEBUG
-                new ToolStripMenuItem("Reset Icons", null, ResetIconsMenu_Click)
+            toolsMenuYAFD.DropDownItems.Add(new ToolStripSeparator());
+            toolsMenuYAFD.DropDownItems.Add(new ToolStripMenuItem("Reset Icons", null, ResetIconsMenu_Click));
 #endif
-            };
-            toolsMenuYAFD = new ToolStripMenuItem("Yet Another Favicon Downloader", menuImage, toolsMenuDropDownItems);
 
             pluginHost.MainWindow.ToolsMenu.DropDownItems.Add(toolsMenuSeparator);
             pluginHost.MainWindow.ToolsMenu.DropDownItems.Add(toolsMenuYAFD);
@@ -208,10 +267,12 @@ namespace YetAnotherFaviconDownloader
             // Remove Entry Context menu items
             pluginHost.MainWindow.EntryContextMenu.Items.Remove(entrySeparator);
             pluginHost.MainWindow.EntryContextMenu.Items.Remove(entryDownloadFaviconsItem);
+            pluginHost.MainWindow.EntryContextMenu.Items.Remove(entryDownloadFaviconsCustomItem);
 
             // Remove Group Context menu items
             pluginHost.MainWindow.GroupContextMenu.Items.Remove(groupSeparator);
             pluginHost.MainWindow.GroupContextMenu.Items.Remove(groupDownloadFaviconsItem);
+            pluginHost.MainWindow.GroupContextMenu.Items.Remove(groupDownloadFaviconsCustomItem);
 
 #if DEBUG
             // Remove Tools menu items
@@ -290,6 +351,7 @@ namespace YetAnotherFaviconDownloader
 
             Config.SetUseTitleField(menu.Checked);
         }
+
         private void LastModifiedMenu_Click(object sender, EventArgs e)
         {
             ToolStripMenuItem menu = sender as ToolStripMenuItem;
@@ -297,6 +359,53 @@ namespace YetAnotherFaviconDownloader
             menu.Checked = !menu.Checked;
 
             Config.SetUpdateLastModified(menu.Checked);
+        }
+
+        private void SkipExistingMenu_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menu = sender as ToolStripMenuItem;
+
+            menu.Checked = !menu.Checked;
+
+            Config.SetSkipExistingIcons(menu.Checked);
+        }
+
+        private void FallbackProvidersMenu_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menu = sender as ToolStripMenuItem;
+
+            menu.Checked = !menu.Checked;
+
+            Config.SetUseFallbackProviders(menu.Checked);
+        }
+
+        private void AllowInvalidCertsMenu_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menu = sender as ToolStripMenuItem;
+
+            menu.Checked = !menu.Checked;
+
+            Config.SetAllowInvalidCertificates(menu.Checked);
+
+            // Show warning about security implications
+            if (menu.Checked)
+            {
+                MessageBox.Show(
+                    "Warning: Allowing self-signed certificates reduces security.\n\n" +
+                    "Only enable this if you need to download favicons from internal servers with self-signed certificates.",
+                    "Security Warning",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void AutoSaveMenu_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menu = sender as ToolStripMenuItem;
+
+            menu.Checked = !menu.Checked;
+
+            Config.SetAutoSaveDatabase(menu.Checked);
         }
 
         private void MaximumIconSize_Click(object sender, EventArgs e)
@@ -311,6 +420,53 @@ namespace YetAnotherFaviconDownloader
                 {
                     menu.Checked = true;
                     Config.SetMaximumIconSize((i + 1) * iconSizeIncr);
+                }
+            }
+        }
+
+        private void ConnectionTimeout_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menu = sender as ToolStripMenuItem;
+
+            foreach (var item in toolsTimeoutSubItems)
+            {
+                item.Checked = false;
+            }
+
+            menu.Checked = true;
+            int timeout = (int)menu.Tag;
+            Config.SetConnectionTimeout(timeout);
+        }
+
+        private void IconPrefixMenu_Click(object sender, EventArgs e)
+        {
+            string currentPrefix = Config.GetIconNamePrefix();
+            
+            using (var dialog = new Form())
+            {
+                dialog.Text = "Icon Name Prefix";
+                dialog.Width = 350;
+                dialog.Height = 150;
+                dialog.FormBorderStyle = FormBorderStyle.FixedDialog;
+                dialog.StartPosition = FormStartPosition.CenterParent;
+                dialog.MaximizeBox = false;
+                dialog.MinimizeBox = false;
+
+                var label = new Label() { Left = 20, Top = 20, Text = "Enter prefix for icon names (leave empty for no prefix):", AutoSize = true };
+                var textBox = new TextBox() { Left = 20, Top = 45, Width = 290, Text = currentPrefix };
+                var btnOk = new Button() { Text = "OK", Left = 150, Top = 80, Width = 75, DialogResult = DialogResult.OK };
+                var btnCancel = new Button() { Text = "Cancel", Left = 235, Top = 80, Width = 75, DialogResult = DialogResult.Cancel };
+
+                dialog.Controls.Add(label);
+                dialog.Controls.Add(textBox);
+                dialog.Controls.Add(btnOk);
+                dialog.Controls.Add(btnCancel);
+                dialog.AcceptButton = btnOk;
+                dialog.CancelButton = btnCancel;
+
+                if (dialog.ShowDialog(pluginHost.MainWindow) == DialogResult.OK)
+                {
+                    Config.SetIconNamePrefix(textBox.Text);
                 }
             }
         }

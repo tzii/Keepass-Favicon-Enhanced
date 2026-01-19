@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
@@ -15,9 +15,10 @@ namespace YetAnotherFaviconDownloader
         {
             providers.Add(new Provider("None (Default)", null));
             providers.Add(new Provider("DuckDuckGo", "https://icons.duckduckgo.com/ip3/{URL:HOST}.ico"));
-            providers.Add(new Provider("Favicon Kit", "https://api.faviconkit.com/{URL:HOST}/{YAFD:ICON_SIZE}"));
-            providers.Add(new Provider("Google", "https://www.google.com/s2/favicons?domain={URL:HOST}&sz={YAFD:ICON_SIZE}"));
+            providers.Add(new Provider("Google", "https://www.google.com/s2/favicons?domain={URL:SCM}://{URL:HOST}&sz={YAFD:ICON_SIZE}"));
+            providers.Add(new Provider("Icon Horse", "https://icon.horse/icon/{URL:HOST}"));
             providers.Add(new Provider("Yandex", "https://favicon.yandex.net/favicon/{URL:HOST}"));
+            providers.Add(new Provider("Clearbit Logo", "https://logo.clearbit.com/{URL:HOST}"));
             providers.Add(customProvider);
         }
 
