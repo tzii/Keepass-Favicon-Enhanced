@@ -3,6 +3,7 @@ name: Build PLGX
 on:
   push:
     branches: [ master, main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ master, main ]
 
@@ -29,3 +30,10 @@ jobs:
       with:
         name: KeePassIconFetch
         path: KeePassIconFetch.plgx
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: softprops/action-gh-release@v2
+      with:
+        files: KeePassIconFetch.plgx
+        generate_release_notes: true
