@@ -42,7 +42,8 @@ echo.
 :: Deploy PLGX file
 echo Deploying...
 move /Y publish.plgx %NAME%.plgx
-del "%SOURCE%\bin\Debug\%NAME%.*"
+if not exist "%SOURCE%\bin\Debug\" mkdir "%SOURCE%\bin\Debug"
+del "%SOURCE%\bin\Debug\%NAME%.*" 2>nul
 copy "%CD%\%NAME%.plgx" "%SOURCE%\bin\Debug\%NAME%.plgx" /Y
 echo.
 
