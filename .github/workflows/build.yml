@@ -15,7 +15,7 @@ jobs:
 
     - name: Download KeePass
       run: |
-        Invoke-WebRequest -Uri "https://sourceforge.net/projects/keepass/files/KeePass%202.x/2.54/KeePass-2.54.zip/download" -OutFile "KeePass.zip"
+        & curl.exe -L -o KeePass.zip "https://sourceforge.net/projects/keepass/files/KeePass%202.x/2.54/KeePass-2.54.zip/download"
         Expand-Archive -Path "KeePass.zip" -DestinationPath "KeePass"
 
     - name: Build PLGX
