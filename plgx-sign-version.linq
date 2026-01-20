@@ -94,4 +94,4 @@ using (var sha512 = SHA512.Create())
 }
 
 Console.WriteLine();
-Console.WriteLine("Don't forget to change version on file YAFD/Properties/AssemblyInfo.cs");
+Console.WriteLine("Don't forget to change version on file KeePassIconFetch/Properties/AssemblyInfo.cs");

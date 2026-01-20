@@ -1,0 +1,31 @@
+name: Build PLGX
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Download KeePass
+      run: |
+        Invoke-WebRequest -Uri "https://sourceforge.net/projects/keepass/files/KeePass%202.x/2.54/KeePass-2.54.zip/download" -OutFile "KeePass.zip"
+        Expand-Archive -Path "KeePass.zip" -DestinationPath "KeePass"
+
+    - name: Build PLGX
+      shell: cmd
+      run: |
+        set KEEPASS=%CD%\KeePass\KeePass.exe
+        plgx-build.bat no-pause
+
+    - name: Upload PLGX
+      uses: actions/upload-artifact@v4
+      with:
+        name: KeePassIconFetch
+        path: KeePassIconFetch.plgx

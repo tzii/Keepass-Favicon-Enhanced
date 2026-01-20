@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("Yet Another Favicon Downloader Enhanced")]
+[assembly: AssemblyTitle("KeePass IconFetch")]
 [assembly: AssemblyDescription("Enhanced favicon downloader for KeePass 2.x with robust icon detection, Android URL support, and fallback providers")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Fork by tzii - Original by Rafael Cossovan de França")]
-[assembly: AssemblyProduct("KeePass Plugin")]
+[assembly: AssemblyProduct("KeePass IconFetch")]
 [assembly: AssemblyCopyright("Copyright © 2017-2026 Rafael Cossovan de França, tzii")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]

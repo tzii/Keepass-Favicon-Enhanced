@@ -1,9 +1,9 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29306.81
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YetAnotherFaviconDownloader", "YAFD\YetAnotherFaviconDownloader.csproj", "{D336CD55-D045-4D90-8398-59F0A7D419BB}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeePassIconFetch", "KeePassIconFetch\KeePassIconFetch.csproj", "{D336CD55-D045-4D90-8398-59F0A7D419BB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{636AC514-50FB-4D60-B534-B42F663158AC}"
 EndProject

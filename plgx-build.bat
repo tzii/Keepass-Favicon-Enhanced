@@ -2,9 +2,12 @@
 CHDIR /D %CD%
 
 :: Configuration
-SET SOURCE=%CD%\YAFD
+SET SOURCE=%CD%\KeePassIconFetch
 SET TARGET=%CD%\publish
-SET KEEPASS="%ProgramFiles%\KeePass Password Safe 2\KeePass.exe"
+
+IF "%KEEPASS%"=="" (
+	SET KEEPASS="%ProgramFiles%\KeePass Password Safe 2\KeePass.exe"
+)
 
 REM Windows x86 (32 bits)
 if not exist %KEEPASS% (
@@ -16,7 +19,7 @@ if not exist %KEEPASS% (
 	SET KEEPASS="%ProgramW6432%\KeePass Password Safe 2\KeePass.exe"
 )
 
-SET NAME=YetAnotherFaviconDownloader
+SET NAME=KeePassIconFetch
 
 :: Clean old files
 if exist %TARGET% (

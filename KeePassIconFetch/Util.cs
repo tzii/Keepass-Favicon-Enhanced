@@ -87,10 +87,12 @@ namespace YetAnotherFaviconDownloader
         {
             try
             {
+#if DEBUG
                 string msg = string.Format(format, args);
                 string logFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "YAFD.log");
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
                 System.IO.File.AppendAllText(logFile, string.Format("[{0}] {1}{2}", timestamp, msg, Environment.NewLine));
+#endif
             }
             catch
             {

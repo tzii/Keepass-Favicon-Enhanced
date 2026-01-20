@@ -1,7 +1,7 @@
-# Yet Another Favicon Downloader - Enhanced
+# KeePass IconFetch
 
-[![GitHub release](https://img.shields.io/github/release/tzii/Keepass-Favicon-Enhanced.svg)](https://github.com/tzii/Keepass-Favicon-Enhanced/releases/latest)
-[![license](https://img.shields.io/github/license/tzii/Keepass-Favicon-Enhanced.svg)](/LICENSE)
+[![GitHub release](https://img.shields.io/github/release/tzii/KeePass-IconFetch.svg)](https://github.com/tzii/KeePass-IconFetch/releases/latest)
+[![license](https://img.shields.io/github/license/tzii/KeePass-IconFetch.svg)](/LICENSE)
 
 ## Table of contents
 
@@ -19,7 +19,7 @@
 
 ## Overview
 
-_Yet Another Favicon Downloader Enhanced_ is a significantly improved fork of the original YAFD plugin for _KeePass_ 2.x. It allows you to quickly download favicons for your password entries with enhanced reliability, more features, and better icon detection.
+_KeePass IconFetch_ (formerly Yet Another Favicon Downloader Enhanced) is a significantly improved fork of the original YAFD plugin for _KeePass_ 2.x. It allows you to quickly download favicons for your password entries with enhanced reliability, more features, and better icon detection.
 
 ### Features
 

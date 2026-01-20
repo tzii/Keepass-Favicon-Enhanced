@@ -26,7 +26,7 @@ namespace YetAnotherFaviconDownloader
         private static readonly Regex headTag, baseTag, commentTag, scriptStyleTag;
         private static readonly Regex linkTags, relAttribute, relAppleTouchIcon, relMaskIcon;
         private static readonly Regex hrefAttribute, sizesAttribute, typeAttribute;
-        private static readonly Regex ogImage;
+        private static readonly Regex ogImage, twitterImage, schemaImage;
 
         // Android package to domain mapping patterns - use the comprehensive mapping class
         // (Inline mappings kept as fallback for common apps)
@@ -85,6 +85,8 @@ namespace YetAnotherFaviconDownloader
 
             // Open Graph image (for Google Play fallback)
             ogImage = new Regex(@"<meta\s+property=""og:image""\s+content=""(?<url>[^""]+)""", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
+            twitterImage = new Regex(@"<meta\s+name=""twitter:image""\s+content=""(?<url>[^""]+)""", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
+            schemaImage = new Regex(@"<img\s+[^>]*itemprop=""image""[^>]*src=""(?<url>[^""]+)""", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
 
             // Enable TLS for newer .NET versions
             try
@@ -181,7 +183,10 @@ namespace YetAnotherFaviconDownloader
                 Util.Log("Trying Google Play Store: {0}", playStoreUrl);
 
                 string page = DownloadPage(new Uri(playStoreUrl));
+                
                 Match match = ogImage.Match(page);
+                if (!match.Success) match = twitterImage.Match(page);
+                if (!match.Success) match = schemaImage.Match(page);
 
                 if (match.Success)
                 {
