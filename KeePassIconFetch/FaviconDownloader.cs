@@ -39,6 +39,9 @@ namespace YetAnotherFaviconDownloader
         private int timeoutMs = 15000;
         private int readWriteTimeoutMs = 45000;
 
+        // Per-instance SSL validation setting (NOT global)
+        private bool allowInvalidCertificates = false;
+
         static FaviconDownloader()
         {
             // Data URI schema
@@ -88,10 +91,13 @@ namespace YetAnotherFaviconDownloader
             twitterImage = new Regex(@"<meta\s+name=""twitter:image""\s+content=""(?<url>[^""]+)""", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
             schemaImage = new Regex(@"<img\s+[^>]*itemprop=""image""[^>]*src=""(?<url>[^""]+)""", RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture | RegexOptions.Compiled | RegexOptions.Singleline);
 
-            // Enable TLS for newer .NET versions
+            // Enable TLS 1.1/1.2/1.3 for newer .NET versions
+            // Note: We ADD to existing protocols rather than replacing them
+            // to avoid breaking other plugins or KeePass itself
             try
             {
-                SecurityProtocolType spt = (SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls);
+                // Preserve existing protocols
+                SecurityProtocolType existingProtocols = ServicePointManager.SecurityProtocol;
 
                 Type tSpt = typeof(SecurityProtocolType);
                 string[] vSpt = Enum.GetNames(tSpt);
@@ -100,10 +106,10 @@ namespace YetAnotherFaviconDownloader
                     if (strSpt.Equals("Tls11", StrUtil.CaseIgnoreCmp) ||
                         strSpt.Equals("Tls12", StrUtil.CaseIgnoreCmp) ||
                         strSpt.Equals("Tls13", StrUtil.CaseIgnoreCmp))
-                        spt |= (SecurityProtocolType)Enum.Parse(tSpt, strSpt, true);
+                        existingProtocols |= (SecurityProtocolType)Enum.Parse(tSpt, strSpt, true);
                 }
 
-                ServicePointManager.SecurityProtocol = spt;
+                ServicePointManager.SecurityProtocol = existingProtocols;
             }
             catch (Exception) { }
         }
@@ -120,13 +126,10 @@ namespace YetAnotherFaviconDownloader
             }
             catch { }
 
-            // Set up certificate validation if needed
+            // Load SSL validation setting (stored per-instance, applied per-request)
             try
             {
-                if (YetAnotherFaviconDownloaderExt.Config.GetAllowInvalidCertificates())
-                {
-                    ServicePointManager.ServerCertificateValidationCallback = AcceptAllCertificates;
-                }
+                allowInvalidCertificates = YetAnotherFaviconDownloaderExt.Config.GetAllowInvalidCertificates();
             }
             catch { }
         }
@@ -614,6 +617,12 @@ namespace YetAnotherFaviconDownloader
             request.Headers.Add("Sec-Fetch-Site", "none");
             request.Headers.Add("Sec-Fetch-User", "?1");
             request.Headers.Add("Upgrade-Insecure-Requests", "1");
+
+            // Per-request SSL certificate validation (NOT global)
+            if (allowInvalidCertificates)
+            {
+                request.ServerCertificateValidationCallback = AcceptAllCertificates;
+            }
 
             return request;
         }
